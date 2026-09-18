@@ -11,6 +11,12 @@ libcseries_a_SOURCES = byte_swapping.h BStream.h csalerts.h		\
 
 EXTRA_libcseries_a_SOURCES = csalerts.mm cspaths.mm
 
+# On macOS the alert and path backends are Objective-C++ (Cocoa) implementations;
+# the *_sdl.cpp units leave those symbols extern on Apple and expect these.
+if DARWIN
+libcseries_a_SOURCES += csalerts.mm cspaths.mm
+endif
+
 AM_CPPFLAGS = -I$(top_srcdir)/Source_Files/Files -I$(top_srcdir)/Source_Files/GameWorld \
   -I$(top_srcdir)/Source_Files/Input -I$(top_srcdir)/Source_Files/Misc \
   -I$(top_srcdir)/Source_Files/ModelView -I$(top_srcdir)/Source_Files/Network \

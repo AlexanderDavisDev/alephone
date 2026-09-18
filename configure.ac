@@ -50,6 +50,9 @@ AC_PROG_OBJCXX
 AC_PROG_INSTALL
 AC_PROG_RANLIB
 
+dnl macOS provides some CSeries backends as Objective-C++ (.mm) sources.
+AM_CONDITIONAL([DARWIN], [case "$target" in *-*-darwin*) true ;; *) false ;; esac])
+
 dnl Require C++17 or newer and enable C++17 if needed.
 AX_CXX_COMPILE_STDCXX([17], [], [mandatory])
 
@@ -183,8 +186,11 @@ AS_IF([test "x$enable_opengl" != "xno"],
                 [ SYS_GL_LIBS="-lGLEW -lopengl32 -lglu32"
                   LIBS="$LIBS -lstdc++" ],
                 [*-*-darwin*],
-                [ SYS_GL_LIBS="-F/System/Library/Frameworks -framework AGL -framework OpenGL"
-                  CPPFLAGS="$CPPFLAGS -D__DARWIN__ -F/System/Library/Frameworks -I/System/Library/Frameworks/OpenGL.framework/Headers" ],
+                dnl Modern macOS: OpenGL headers live in the active SDK (found via
+                dnl -isysroot), not in a bare /System/Library/Frameworks, and AGL
+                dnl was removed. Link the OpenGL framework only.
+                [ SYS_GL_LIBS="-framework OpenGL"
+                  CPPFLAGS="$CPPFLAGS -D__DARWIN__" ],
                 [*-*-linux*],
                 [ SYS_GL_LIBS="-lGL -lpthread" ],
                 [ SYS_GL_LIBS="-lGL" ])
