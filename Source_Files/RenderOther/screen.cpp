@@ -786,7 +786,8 @@ static bool need_mode_change(int window_width, int window_height,
 		SDL_GetWindowSize(main_screen, &w, &h);
 		if (w != window_width || h != window_height) {
 			SDL_SetWindowSize(main_screen, window_width, window_height);
-			SDL_SetWindowPosition(main_screen, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+			if (!shell_options.editor)  // Daedalus: don't re-center the embedded editor window — the
+				SDL_SetWindowPosition(main_screen, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);  // host positions it over the viewport pane (re-centering flashes it on restart)
 		}
 	}
 	if (!hasgl) {
