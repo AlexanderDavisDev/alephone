@@ -1226,6 +1226,12 @@ void encode_hotkey_sequence(int hotkey)
 
 uint32_t last_input_update;
 
+// Daedalus (carried patch): an optional host-supplied keyboard-state array. When set, the
+// game's keymap is read from it instead of SDL's (see parse_keymap). nullptr = upstream.
+static const Uint8 *sDaedalusHostKeyboard = nullptr;
+extern "C" void daedalus_set_host_keyboard_state(const Uint8 *state) { sDaedalusHostKeyboard = state; }
+const Uint8 *daedalus_host_keyboard_state(void) { return sDaedalusHostKeyboard; }
+
 uint32 parse_keymap(void)
 {
   uint32 flags = 0;
@@ -1235,6 +1241,13 @@ uint32 parse_keymap(void)
 		Uint8 key_map[SDL_NUM_SCANCODES];
       if (Console::instance()->input_active()) {
 	memset(key_map, 0, sizeof(key_map));
+      } else if (const Uint8 *host = daedalus_host_keyboard_state()) {
+	// Daedalus (carried patch): read an embedding host's keyboard state instead of SDL's.
+	// In the editor the engine's SDL window is a child of the Qt window, so keyboard events
+	// (esp. key-UPs) reach SDL unreliably and SDL_GetKeyboardState goes stale (stuck keys);
+	// Qt owns the keyboard reliably and feeds this array. Unset (nullptr) by default →
+	// unchanged upstream behavior. Additive embedding hook.
+	memcpy(key_map, host, sizeof(key_map));
       } else {
 		  memcpy(key_map, SDL_GetKeyboardState(NULL), sizeof(key_map));
 		  auto mod_state = SDL_GetModState();
