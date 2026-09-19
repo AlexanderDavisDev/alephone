@@ -1473,7 +1473,16 @@ static void process_event(const SDL_Event &event)
 		}
 		break;
 	}
-	
+
+}
+
+// Daedalus (carried patch): public entry so an embedding host that drives its own
+// loop (the Daedalus editor) can feed SDL events into the engine's normal event
+// handler. Additive seam only — process_event itself is unchanged. Candidate upstream
+// as generic "embedding support." See Daedalus _Docs/Upstream-Alignment.md.
+void daedalus_feed_event(const SDL_Event &event)
+{
+	process_event(event);
 }
 
 std::string to_alnum(const std::string& input)
