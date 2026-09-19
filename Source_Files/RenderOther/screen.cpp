@@ -2261,6 +2261,11 @@ bool MainScreenIsOpenGL()
 }
 void MainScreenSwap()
 {
+	// Daedalus embed seam: when the engine is driving a host-owned FBO (Daedalus
+	// viewport) instead of the window, don't present the (hidden/backgrounded) SDL
+	// window — just flush so the host can consume the rendered FBO. See OGL_FBO.cpp.
+	extern GLuint default_framebuffer();
+	if (default_framebuffer() != 0) { glFlush(); return; }
 	SDL_GL_SwapWindow(main_screen);
 }
 void MainScreenCenterMouse()
