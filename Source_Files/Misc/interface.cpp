@@ -2663,8 +2663,10 @@ static bool begin_game(
 			interface_fade_out(MAIN_MENU_BASE, true);
 		}
 
-		/* Try to display the first chapter screen.. */
-		if (user != _network_player && user != _demo && !is_saved_game_replay())
+		/* Try to display the first chapter screen.. (skipped in editor mode: a map
+		   preview/playtest must not block on an interstitial movie + chapter screen,
+		   which waits on a click/keypress — Daedalus embed) */
+		if (user != _network_player && user != _demo && !is_saved_game_replay() && !shell_options.editor)
 		{
 			FindLevelMovie(entry.level_number);
 			show_movie(entry.level_number);
