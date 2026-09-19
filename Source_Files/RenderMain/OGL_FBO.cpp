@@ -31,6 +31,12 @@
 
 std::vector<FBO *> FBO::active_chain;
 
+// Daedalus embed seam (see OGL_FBO.h): the host FBO the engine treats as its
+// "default" final target. 0 == the SDL window (unchanged upstream behavior).
+static GLuint sDefaultFramebuffer = 0;
+void set_default_framebuffer(GLuint fbo) { sDefaultFramebuffer = fbo; }
+GLuint default_framebuffer() { return sDefaultFramebuffer; }
+
 FBO::FBO(GLuint w, GLuint h, bool srgb) : _h(h), _w(w), _srgb(srgb) {
 	glGenFramebuffersEXT(1, &_fbo);
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, _fbo);
@@ -47,7 +53,7 @@ FBO::FBO(GLuint w, GLuint h, bool srgb) : _h(h), _w(w), _srgb(srgb) {
 	glTexParameteri(GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MIN_FILTER, TxtrTypeInfoList[OGL_Txtr_HUD].FarFilter);
 	glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_RECTANGLE_ARB, texID, 0);
 	assert(glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT) == GL_FRAMEBUFFER_COMPLETE_EXT);
-	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, default_framebuffer());
 }
 
 void FBO::activate(bool clear, GLuint fboTarget) {
@@ -71,7 +77,7 @@ void FBO::deactivate() {
 		active_chain.pop_back();
 		glPopAttrib();
 		
-		GLuint prev_fbo = 0;
+		GLuint prev_fbo = default_framebuffer();
 		bool prev_srgb = Using_sRGB;
 		if (active_chain.size()) {
 			prev_fbo = active_chain.back()->_fbo;

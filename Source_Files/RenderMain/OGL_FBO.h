@@ -29,6 +29,13 @@
 #include "OGL_Headers.h"
 #include <vector>
 
+// Daedalus embed seam: the engine normally binds framebuffer 0 (the SDL window) as
+// its final render target; set this to a host FBO id to make the final composite
+// land there instead (e.g. a Qt QQuickFramebufferObject). Default 0 == unchanged
+// upstream behavior. See _Docs/Engine-Integration.md / Upstream-Alignment.md ledger.
+void set_default_framebuffer(GLuint fbo);
+GLuint default_framebuffer();
+
 class FBO {
 	
 private:
