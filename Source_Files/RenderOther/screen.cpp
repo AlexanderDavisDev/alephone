@@ -1561,7 +1561,7 @@ void render_screen(short ticks_elapsed)
 			}
 		}
 
-		if (!get_keyboard_controller_status())
+		if (!get_keyboard_controller_status() && !shell_options.editor)  // Daedalus: no inactive dim in the editor viewport
 		{
 			darken_world_window();
 		}
@@ -1581,7 +1581,7 @@ void render_screen(short ticks_elapsed)
 	// Swap OpenGL double-buffers
 	if (screen_mode.acceleration != _no_acceleration)
 	{
-		if (!get_keyboard_controller_status())
+		if (!get_keyboard_controller_status() && !shell_options.editor)  // Daedalus: no inactive dim in the editor viewport
 		{
 			darken_world_window();
 		}
