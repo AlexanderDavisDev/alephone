@@ -2144,39 +2144,33 @@ terminal_text_t* MarathonTerminalCompiler::Compile()
 			group.flags = _group_is_marathon_1;
 			group.permutation = 0;
 			
-			if (algo::istarts_with(line, "#logon"))
-			{
-				group.type = _logon_group;
-			}
-			else if (algo::istarts_with(line, "#information"))
-			{
-				group.type = _information_group;
-			}
-			else if (algo::istarts_with(line, "#checkpoint"))
-			{
-				group.type = _checkpoint_group;
-				std::istringstream permutation(line.substr(1 + strlen("#checkpoint")));
-				permutation >> group.permutation;
-			}
-			else if (algo::istarts_with(line, "#briefing"))
-			{
-				group.type = _interlevel_teleport_group;
-				std::istringstream permutation(line.substr(1 + strlen("#briefing")));
-				permutation >> group.permutation;
-			}
-			else if (algo::istarts_with(line, "#unfinished"))
-			{
-				group.type = _unfinished_group;
-			}
-			else if (algo::istarts_with(line, "#success"))
-			{
-				group.type = _success_group;
-			}
-			else if (algo::istarts_with(line, "#failure"))
-			{
-				group.type = _failure_group;
-			}
-			else 
+			// A directive that carries an id (pict/logon/checkpoint/…) has it as the first token
+			// after the keyword; istringstream skips the leading space. Daedalus extended this to
+			// the full Atque .term.txt directive set (originally only logon/information/checkpoint/
+			// briefing/unfinished/success/failure were handled), so working maps' terminals compile.
+			auto perm = [&](const char* kw) {
+				std::istringstream s(line.substr(strlen(kw)));
+				int v = 0; s >> v; group.permutation = static_cast<int16>(v);
+			};
+			if (algo::istarts_with(line, "#logoff"))       { group.type = _logoff_group;              perm("#logoff"); }
+			else if (algo::istarts_with(line, "#logon"))    { group.type = _logon_group;               perm("#logon"); }
+			else if (algo::istarts_with(line, "#information")) { group.type = _information_group; }
+			else if (algo::istarts_with(line, "#interlevel")) { group.type = _interlevel_teleport_group; perm("#interlevel"); }
+			else if (algo::istarts_with(line, "#intralevel")) { group.type = _intralevel_teleport_group; perm("#intralevel"); }
+			else if (algo::istarts_with(line, "#checkpoint")) { group.type = _checkpoint_group;         perm("#checkpoint"); }
+			else if (algo::istarts_with(line, "#briefing"))   { group.type = _interlevel_teleport_group; perm("#briefing"); }
+			else if (algo::istarts_with(line, "#pict"))     { group.type = _pict_group;                perm("#pict"); }
+			else if (algo::istarts_with(line, "#movie"))    { group.type = _movie_group;               perm("#movie"); }
+			else if (algo::istarts_with(line, "#static"))   { group.type = _static_group;              perm("#static"); }
+			else if (algo::istarts_with(line, "#camera"))   { group.type = _camera_group;              perm("#camera"); }
+			else if (algo::istarts_with(line, "#tag"))      { group.type = _tag_group;                 perm("#tag"); }
+			else if (algo::istarts_with(line, "#sound"))    { group.type = _sound_group;               perm("#sound"); }
+			else if (algo::istarts_with(line, "#track"))    { group.type = _track_group;               perm("#track"); }
+			else if (algo::istarts_with(line, "#unfinished")) { group.type = _unfinished_group; }
+			else if (algo::istarts_with(line, "#success") || algo::istarts_with(line, "#finished")) { group.type = _success_group; }
+			else if (algo::istarts_with(line, "#failure"))  { group.type = _failure_group; }
+			else if (algo::istarts_with(line, "#end"))      { group.type = _end_group; }
+			else
 			{
 				logWarning("Unrecognized group");
 				terminal.reset(0);
@@ -2211,6 +2205,69 @@ static terminal_text_t* compile_marathon_terminal(char* text, short length)
 	return compiler.Compile();
 }
 
+// --- Daedalus editor seam: load terminal text from an unmerged (split) map's .term.txt ---------
+// A working/unmerged map has no compiled terminal chunk, so map_terminal_text is empty and its
+// terminals never appear in play. This parses the .term.txt (one or more "#TERMINAL n ...
+// #ENDTERMINAL" blocks), compiles each block's body with the engine's own MarathonTerminalCompiler
+// (the same one the resource path uses), and fills map_terminal_text[n] — so get_indexed_terminal_data()
+// serves them and terminals work in-editor without a merge step. Additive; nullptr/empty is a no-op.
+// (Daedalus editor support; a candidate upstream contribution.)
+extern "C" void daedalus_load_terminal_text(const char* data, int length)
+{
+	if (!data || length <= 0) return;
+
+	// The compiler getlines on MAC_LINE_END ('\r'); .term.txt is commonly LF/CRLF, so normalize
+	// every line ending to a single '\r'.
+	std::string all;
+	all.reserve(length);
+	for (int i = 0; i < length; ++i) {
+		char c = data[i];
+		if (c == '\n') { if (!all.empty() && all.back() == '\r') continue; c = '\r'; }
+		all.push_back(c);
+	}
+
+	std::vector<std::string> lines;
+	{
+		std::string cur;
+		for (char c : all) { if (c == '\r') { lines.push_back(cur); cur.clear(); } else cur.push_back(c); }
+		if (!cur.empty()) lines.push_back(cur);
+	}
+
+	map_terminal_text.clear();
+
+	int curId = -1;
+	std::string body;
+	auto flush = [&]() {
+		if (curId < 0) return;
+		std::vector<char> buf(body.begin(), body.end());
+		if (terminal_text_t* t = compile_marathon_terminal(buf.data(), static_cast<short>(buf.size()))) {
+			if (static_cast<int>(map_terminal_text.size()) <= curId)
+				map_terminal_text.resize(curId + 1);
+			map_terminal_text[curId] = *t;
+			delete t;
+		}
+		curId = -1;
+		body.clear();
+	};
+
+	for (const std::string& ln : lines) {
+		if (algo::istarts_with(ln, "#terminal")) {          // "#TERMINAL n"
+			flush();
+			std::istringstream iss(ln.substr(strlen("#terminal")));
+			curId = -1;
+			iss >> curId;
+			body.clear();
+		} else if (algo::istarts_with(ln, "#endterminal")) {
+			flush();
+		} else if (curId >= 0) {
+			body += ln;
+			body += '\r';
+		}
+	}
+	flush();
+	clear_compiled_terminal_cache();
+}
+
 void MarathonTerminalCompiler::FinishGroup()
 {
 	group.length = out.size() - group.start_index;
@@ -2220,7 +2277,9 @@ void MarathonTerminalCompiler::FinishGroup()
 	switch (group.type)
 	{
 	case _logon_group:
-		checkpoints = nullptr;
+		// NOTE: do NOT null `checkpoints` here. In Atque .term.txt the #LOGON sits *inside* a
+		// section (after #UNFINISHED/#INFORMATION), before the #PICT content — nulling it dropped
+		// every following screen. Leaving it keeps content flowing into the active section.
 		logon_group = group;
 		break;
 	case _information_group:
@@ -2228,7 +2287,16 @@ void MarathonTerminalCompiler::FinishGroup()
 		information_checkpoints.clear();
 		checkpoints = &information_checkpoints;
 		break;
+	// content screens shown in sequence within the active section
 	case _checkpoint_group:
+	case _pict_group:
+	case _movie_group:
+	case _static_group:
+	case _camera_group:
+	case _tag_group:
+	case _sound_group:
+	case _track_group:
+	case _intralevel_teleport_group:
 		if (checkpoints)
 		{
 			checkpoints->push_back(group);
@@ -2250,6 +2318,11 @@ void MarathonTerminalCompiler::FinishGroup()
 		unfinished_group = group;
 		unfinished_checkpoints.clear();
 		checkpoints = &unfinished_checkpoints;
+		break;
+	case _logoff_group:
+	case _end_group:
+	default:
+		// logoff reuses the logon screen in the Build* helpers; end is implicit. Ignore.
 		break;
 	}
 }
