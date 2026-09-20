@@ -2169,8 +2169,11 @@ terminal_text_t* MarathonTerminalCompiler::Compile()
 				std::istringstream s(line.substr(strlen(kw)));
 				int v = 0; s >> v; group.permutation = static_cast<int16>(v);
 			};
-			if (algo::istarts_with(line, "#logoff"))       { group.type = _logoff_group;              perm("#logoff"); }
-			else if (algo::istarts_with(line, "#logon"))    { group.type = _logon_group;               perm("#logon"); }
+			// #logon/#logoff with an explicit pict id (M2/Infinity terminals): clear the
+			// _group_is_marathon_1 flag so draw_logon_text draws that PICT rather than the
+			// hardcoded built-in Marathon logo (which the flag selects).
+			if (algo::istarts_with(line, "#logoff"))       { group.type = _logoff_group;              perm("#logoff"); if (group.permutation) group.flags &= ~_group_is_marathon_1; }
+			else if (algo::istarts_with(line, "#logon"))    { group.type = _logon_group;               perm("#logon");  if (group.permutation) group.flags &= ~_group_is_marathon_1; }
 			else if (algo::istarts_with(line, "#information")) { group.type = _information_group; }
 			else if (algo::istarts_with(line, "#interlevel")) { group.type = _interlevel_teleport_group; perm("#interlevel"); }
 			else if (algo::istarts_with(line, "#intralevel")) { group.type = _intralevel_teleport_group; perm("#intralevel"); }
