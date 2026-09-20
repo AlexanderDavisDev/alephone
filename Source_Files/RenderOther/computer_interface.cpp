@@ -1194,6 +1194,13 @@ static void display_shape(short shape, Rect* frame)
 
 extern int get_pict_header_width(LoadedResource &);
 
+// Daedalus: a directory of loose PICT images to fall back on when the scenario has no compiled
+// PICT resources (an unmerged/working map). Atque's split layout stores them as "<id:05d>.bmp"
+// under the map's Resources/PICT folder; the host points us at it. Empty = disabled (upstream
+// behavior unchanged).
+static std::string daedalus_terminal_pict_dir;
+extern "C" void daedalus_set_terminal_pict_dir(const char* dir) { daedalus_terminal_pict_dir = dir ? dir : ""; }
+
 static void display_picture(
 	short picture_id,
 	Rect *frame,
@@ -1201,9 +1208,19 @@ static void display_picture(
 {
 	LoadedResource PictRsrc;
 
-	auto s = get_picture_resource_from_scenario(picture_id, PictRsrc) ? 
+	auto s = get_picture_resource_from_scenario(picture_id, PictRsrc) ?
 			 picture_to_surface(PictRsrc) :
 			 std::shared_ptr<SDL_Surface>(nullptr, SDL_FreeSurface);
+
+	// Daedalus fallback: load the loose Resources/PICT/<id>.bmp for an unmerged map.
+	if (!s && !daedalus_terminal_pict_dir.empty())
+	{
+		char name[32];
+		snprintf(name, sizeof(name), "/%05d.bmp", picture_id);
+		std::string path = daedalus_terminal_pict_dir + name;
+		if (SDL_Surface* bmp = SDL_LoadBMP(path.c_str()))
+			s = std::shared_ptr<SDL_Surface>(bmp, SDL_FreeSurface);
+	}
 
 	if (s)
 	{
@@ -1214,7 +1231,7 @@ static void display_picture(
 		bounds.right = s->w;
 		bounds.bottom = s->h;
 
-		int pict_header_width = get_pict_header_width(PictRsrc);
+		int pict_header_width = PictRsrc.IsLoaded() ? get_pict_header_width(PictRsrc) : bounds.right;
 		bool cinemascopeHack = false;
 		if (bounds.right != pict_header_width && bounds.right == 614)
 		{
