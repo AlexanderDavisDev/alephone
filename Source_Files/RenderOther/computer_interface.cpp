@@ -2461,7 +2461,11 @@ void MarathonTerminalCompiler::BuildUnfinishedGroup()
 
 	if (information_group.type)
 	{
-		terminal->groupings.push_back(information_group);
+		// Only show the section header as a screen if it carries its own text. In Atque .term.txt
+		// the header (#UNFINISHED/#INFORMATION/…) has no text — the content is in the #PICT groups
+		// below it — so pushing it would insert a blank screen. Always keep the content screens.
+		if (information_group.length > 0)
+			terminal->groupings.push_back(information_group);
 		terminal->groupings.insert(terminal->groupings.end(),
 								   information_checkpoints.begin(),
 								   information_checkpoints.end());
@@ -2469,9 +2473,12 @@ void MarathonTerminalCompiler::BuildUnfinishedGroup()
 
 	if (unfinished_group.type)
 	{
-		group = unfinished_group;
-		group.type = _information_group;
-		terminal->groupings.push_back(group);
+		if (unfinished_group.length > 0)
+		{
+			group = unfinished_group;
+			group.type = _information_group;
+			terminal->groupings.push_back(group);
+		}
 
 		terminal->groupings.insert(terminal->groupings.end(),
 								   unfinished_checkpoints.begin(),
@@ -2504,14 +2511,14 @@ void MarathonTerminalCompiler::BuildSuccessGroup()
 
 		terminal->groupings.push_back(logon_group);
 
-		if (success_group.type == _success_group)
+		if (success_group.type == _success_group && success_group.length > 0)
 		{
 			group = success_group;
 			group.type = _information_group;
 			terminal->groupings.push_back(group);
 		}
 
-		if (briefing_group.type)
+		if (briefing_group.type && briefing_group.length > 0)
 		{
 			group = briefing_group;
 			group.type = _information_group;
@@ -2555,11 +2562,14 @@ void MarathonTerminalCompiler::BuildFailureGroup()
 
 		terminal->groupings.push_back(logon_group);
 
-		group = failure_group;
-		group.type = _information_group;
-		terminal->groupings.push_back(group);
+		if (failure_group.length > 0)
+		{
+			group = failure_group;
+			group.type = _information_group;
+			terminal->groupings.push_back(group);
+		}
 
-		if (briefing_group.type)
+		if (briefing_group.type && briefing_group.length > 0)
 		{
 			group = briefing_group;
 			group.type = _information_group;
