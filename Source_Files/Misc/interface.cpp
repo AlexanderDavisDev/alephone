@@ -2415,6 +2415,11 @@ static void handle_replay( /* This is gross. */
 extern bool is_saved_game_replay();
 
 // ZZZ: some modifications to use generalized game-startup
+// Daedalus editor seam: which level an editor playtest starts on (NONE = the engine default, 0).
+// The editor sets this just before Play so a playtest of level N actually starts on level N, not 0.
+short daedalus_editor_start_level = NONE;
+extern "C" void daedalus_set_editor_start_level(int level) { daedalus_editor_start_level = static_cast<short>(level); }
+
 static bool begin_game(
 	short user,
 	bool cheat)
@@ -2589,7 +2594,9 @@ static bool begin_game(
 				entry.level_number= get_level_number_from_user();
 				if(entry.level_number==NONE) success= false; /* Cancelled */
 			} else {
-				entry.level_number= 0;
+				// Daedalus: an editor playtest starts on the level being edited, not always 0.
+				entry.level_number= (shell_options.editor && daedalus_editor_start_level!=NONE)
+					? daedalus_editor_start_level : 0;
 			}
 	
 			// ZZZ: let the user use his behavior modifiers in single-player.

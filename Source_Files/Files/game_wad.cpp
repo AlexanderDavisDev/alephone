@@ -300,6 +300,34 @@ dynamic_data get_dynamic_data_from_save(FileSpecifier& File)
 	return dynamic_data_return;
 }
 
+// Daedalus editor seam: play the UNSAVED in-memory level with no temp file. Just before an editor
+// playtest, the editor calls daedalus_stash_current_level() while the edited level is still in the
+// globals; build_export_wad serializes it into a stashed wad. new_game() then zeroes dynamic_world
+// (which is why we capture beforehand), and the next load_level_from_map() consumes the stash via
+// process_map_wad instead of re-reading the file — so unsaved edits play, with the real merged Map
+// still set as the map file so terminals/images/physics/other levels resolve natively. One-shot:
+// consumed on the next load; later level transitions read the file as normal.
+static struct wad_data *daedalus_stashed_level_wad = NULL;
+static short daedalus_stashed_level_version = MARATHON_TWO_DATA_VERSION;
+static short daedalus_stashed_level_index = NONE;
+
+extern "C" void daedalus_stash_current_level(int level_number)
+{
+	if (daedalus_stashed_level_wad) { free_wad(daedalus_stashed_level_wad); daedalus_stashed_level_wad = NULL; }
+	struct wad_header header;
+	int32 length;
+	fill_default_wad_header(MapFileSpec, CURRENT_WADFILE_VERSION, MARATHON_TWO_DATA_VERSION, 1, 0, &header);
+	daedalus_stashed_level_wad = build_export_wad(&header, &length);
+	daedalus_stashed_level_version = header.data_version;
+	daedalus_stashed_level_index = static_cast<short>(level_number);
+}
+
+extern "C" void daedalus_clear_stashed_level(void)
+{
+	if (daedalus_stashed_level_wad) { free_wad(daedalus_stashed_level_wad); daedalus_stashed_level_wad = NULL; }
+	daedalus_stashed_level_index = NONE;
+}
+
 bool load_level_from_map(
 	short level_index)
 {
@@ -308,6 +336,17 @@ bool load_level_from_map(
 	struct wad_data *wad;
 	short index_to_load;
 	bool restoring_game= false;
+
+	// Daedalus: load the stashed in-memory level (editor playtest of unsaved edits) instead of
+	// reading the file — but only for the exact level that was stashed, so mid-playtest transitions
+	// to other levels still read the file. The stash is kept (not freed) so a re-Play/revisit of the
+	// edited level replays the clean edited state; it's dropped by daedalus_clear_stashed_level on
+	// Stop. process_map_wad reads the wad without mutating it, so reuse is safe.
+	if (daedalus_stashed_level_wad && level_index != NONE && level_index == daedalus_stashed_level_index)
+	{
+		process_map_wad(daedalus_stashed_level_wad, false, daedalus_stashed_level_version);
+		return (!error_pending());
+	}
 
 	if(file_is_set)
 	{
