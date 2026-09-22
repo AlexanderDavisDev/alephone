@@ -36,7 +36,15 @@ void SW_Texture::build_opac_table()
 
 	m_opac_table.resize(MAXIMUM_SHADING_TABLE_INDEXES);
 
-	SDL_PixelFormat *fmt = MainScreenSurface()->format;
+	// Daedalus defensive guard: don't dereference a missing shading table or screen surface.
+	// A collection whose shading tables aren't built (e.g. a transient state after a GL->software
+	// transition) leaves shading_tables NULL; indexing it segfaults. Skip building this opac table
+	// rather than crash — a later load rebuilds it. number_of_shading_tables < 1 would also make the
+	// (number_of_shading_tables - 1) index negative. See EngineBridge.cpp daedalus_wall_collection.
+	SDL_Surface *main_surface = MainScreenSurface();
+	if (!shading_tables || !main_surface || number_of_shading_tables < 1)
+		return;
+	SDL_PixelFormat *fmt = main_surface->format;
 	if (bit_depth == 32)
 	{
 		for (int i = 0; i < MAXIMUM_SHADING_TABLE_INDEXES; i++)
